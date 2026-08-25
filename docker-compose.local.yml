@@ -1,0 +1,48 @@
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      target: local
+    container_name: aws-setup-php-local
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: mysql
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-aws-setup}
+      DB_USERNAME: ${DB_USERNAME:-aws-setup}
+      DB_PASSWORD: ${DB_PASSWORD:-aws-123}
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  database:
+    image: mysql:8.0
+    container_name: aws-setup-database-local
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-aws-123}
+      MYSQL_DATABASE: ${DB_DATABASE:-aws-setup}
+      MYSQL_USER: ${DB_USERNAME:-aws-setup}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-aws-123}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - db_data_local:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  db_data_local:

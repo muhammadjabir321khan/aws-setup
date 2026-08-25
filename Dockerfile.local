@@ -1,9 +1,7 @@
-FROM php:8.2-fpm AS php
+FROM php:8.2-fpm AS local
 
-ENV PHP_OPCACHE_ENABLE=1
+ENV PHP_OPCACHE_ENABLE=0
 ENV PHP_OPCACHE_CLI=0
-ENV PHP_OPCACHE_VALIDATE_TIMESTAMPS=1
-ENV PHP_OPCACHE_REVALIDATE_FREQ=1
 
 RUN usermod -u 1000 www-data
 
@@ -26,17 +24,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /var/www
 
-COPY docker/php/php.ini /usr/local/etc/php/conf.d/app.ini
+COPY docker/php/php.local.ini /usr/local/etc/php/conf.d/app.ini
 COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 COPY docker/nginx/nginx.config /etc/nginx/nginx.conf
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY docker/entrypoint.local.sh /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh
 
 COPY --from=composer:2.3.5 /usr/bin/composer /usr/bin/composer
-COPY --chown=www-data:www-data . .
 
-RUN php artisan cache:clear || true \
-    && php artisan config:clear || true \
+RUN mkdir -p storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 EXPOSE 8000
