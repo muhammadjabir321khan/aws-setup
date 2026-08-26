@@ -44,9 +44,13 @@ until php -r "
 done
 echo "Database is ready."
 
-php artisan config:clear || true
-php artisan cache:clear || true
+mkdir -p storage/framework/{cache/data,sessions,views} storage/logs bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+
+php artisan config:clear || true
+# Use file cache for this boot step so missing DB cache tables do not spam errors.
+CACHE_STORE=file php artisan cache:clear || true
 
 php-fpm -D
 exec nginx -g "daemon off;"

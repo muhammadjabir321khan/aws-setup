@@ -1,14 +1,27 @@
-.PHONY: help setup install env up down build restart logs shell composer migrate fresh seed assets key test clean
+.PHONY: help setup install env up down build restart logs shell composer migrate fresh seed assets key test clean \
+	ecr-login prod-build prod-tag push
 
 COMPOSE  := docker compose -f docker-compose.local.yml
 PHP      := $(COMPOSE) exec -T php
 APP_URL  := http://127.0.0.1:8000
 
+# ECR / production image
+AWS_REGION   ?= eu-north-1
+AWS_ACCOUNT  ?= 161327178744
+ECR_REPO     ?= laravel-app
+IMAGE_NAME   ?= laravel-app
+IMAGE_TAG    ?= latest
+ECR_REGISTRY := $(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
+ECR_IMAGE    := $(ECR_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)
+
 help: ## Show available commands
 	@echo ""
-	@echo "  AWS-setup local development"
+	@echo "  AWS-setup"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "  Production push: make push"
+	@echo "  Image: $(ECR_IMAGE)"
 	@echo ""
 
 setup: env build up wait-db composer key migrate assets ## First-time local setup (run once)
@@ -80,3 +93,18 @@ test: ## Run PHPUnit/Pest tests
 
 clean: ## Stop containers and remove volumes
 	$(COMPOSE) down -v
+
+ecr-login: ## Authenticate Docker to AWS ECR
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(ECR_REGISTRY)
+
+prod-build: assets ## Build production Docker image (Dockerfile)
+	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
+
+prod-tag: ## Tag local image for ECR
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(ECR_IMAGE)
+
+push: ecr-login prod-build prod-tag ## Build, tag, and push image to ECR
+	docker push $(ECR_IMAGE)
+	@echo ""
+	@echo "  Pushed: $(ECR_IMAGE)"
+	@echo ""
