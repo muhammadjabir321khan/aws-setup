@@ -13,12 +13,17 @@ services:
     environment:
       APP_ENV: local
       APP_DEBUG: "true"
+      LOG_CHANNEL: stack
+      LOG_STACK: single
       DB_CONNECTION: mysql
       DB_HOST: database
       DB_PORT: 3306
-      DB_DATABASE: ${DB_DATABASE:-aws-setup}
-      DB_USERNAME: ${DB_USERNAME:-aws-setup}
-      DB_PASSWORD: ${DB_PASSWORD:-aws-123}
+      # Must match an existing database in the MySQL volume (run: docker exec aws-setup-database-local mysql -uroot -pjabir321 -e "SHOW DATABASES;")
+      DB_DATABASE: awssetup
+      DB_USERNAME: admin
+      DB_PASSWORD: jabir321
+      # Local MySQL container has no SSL — override MYSQL_ATTR_SSL_CA from .env
+      MYSQL_ATTR_SSL_CA: ""
     depends_on:
       database:
         condition: service_healthy
@@ -28,10 +33,10 @@ services:
     image: mysql:8.0
     container_name: aws-setup-database-local
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-aws-123}
-      MYSQL_DATABASE: ${DB_DATABASE:-aws-setup}
-      MYSQL_USER: ${DB_USERNAME:-aws-setup}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-aws-123}
+      MYSQL_ROOT_PASSWORD: jabir321
+      MYSQL_DATABASE: awssetup
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: jabir321
     ports:
       - "${DB_PORT:-3306}:3306"
     volumes:

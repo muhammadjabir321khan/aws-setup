@@ -12,10 +12,24 @@ if [ ! -f ".env" ]; then
     sed -i 's|^# DB_CONNECTION=sqlite|DB_CONNECTION=mysql|' .env
     sed -i 's|^# DB_HOST=.*|DB_HOST=database|' .env
     sed -i 's|^# DB_PORT=.*|DB_PORT=3306|' .env
-    sed -i 's|^# DB_DATABASE=.*|DB_DATABASE=aws-setup|' .env
-    sed -i 's|^# DB_USERNAME=.*|DB_USERNAME=aws-setup|' .env
-    sed -i 's|^# DB_PASSWORD=.*|DB_PASSWORD=aws-123|' .env
+    sed -i 's|^# DB_DATABASE=.*|DB_DATABASE=awssetup|' .env
+    sed -i 's|^# DB_USERNAME=.*|DB_USERNAME=admin|' .env
+    sed -i 's|^# DB_PASSWORD=.*|DB_PASSWORD=jabir321|' .env
 fi
+
+fix_permissions() {
+    mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache
+    touch storage/logs/laravel.log
+    chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+    find storage bootstrap/cache -type d -exec chmod 775 {} \; 2>/dev/null || true
+    find storage bootstrap/cache -type f -exec chmod 664 {} \; 2>/dev/null || true
+}
+
+fix_permissions
+
+# Start web stack immediately — Docker maps :8000 before setup finishes.
+php-fpm -D
+nginx
 
 if [ ! -f "vendor/autoload.php" ]; then
     echo "Installing Composer dependencies..."
@@ -32,8 +46,8 @@ until php -r "
     try {
         new PDO(
             'mysql:host=${DB_HOST:-database};port=${DB_PORT:-3306}',
-            '${DB_USERNAME:-aws-setup}',
-            '${DB_PASSWORD:-aws-123}'
+            '${DB_USERNAME:-admin}',
+            '${DB_PASSWORD:-jabir321}'
         );
         exit(0);
     } catch (Exception \$e) {
@@ -44,24 +58,14 @@ until php -r "
 done
 echo "Database is ready."
 
-# Bind mount (./:/var/www) overrides image ownership — fix on every start.
-# PHP-FPM user is www-data (docker/php/php-fpm.conf).
-fix_permissions() {
-    mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache
-    touch storage/logs/laravel.log
-    chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
-    find storage bootstrap/cache -type d -exec chmod 775 {} \; 2>/dev/null || true
-    find storage bootstrap/cache -type f -exec chmod 664 {} \; 2>/dev/null || true
-}
-
-fix_permissions
-
 php artisan config:clear || true
-# Use file cache for this boot step so missing DB cache tables do not spam errors.
+rm -f bootstrap/cache/config.php
 CACHE_STORE=file php artisan cache:clear || true
 
-# Artisan may create root-owned files — reclaim for php-fpm
+echo "Running migrations..."
+php artisan migrate --force --no-interaction || true
+
 fix_permissions
 
-php-fpm -D
-exec nginx -g "daemon off;"
+# nginx runs as a background daemon; keep container alive in foreground
+exec tail -f /var/log/nginx/access.log /var/log/nginx/error.log 2>/dev/null || exec sleep infinity
