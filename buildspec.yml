@@ -1,4 +1,5 @@
 version: 0.2
+
 env:
   variables:
     AWS_DEFAULT_REGION: eu-north-1
