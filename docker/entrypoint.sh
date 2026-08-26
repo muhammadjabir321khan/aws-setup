@@ -14,22 +14,18 @@ if [ ! -f ".env" ]; then
 fi
 
 mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache database
-chown -R www-data:www-data storage bootstrap/cache database
-chmod -R 775 storage bootstrap/cache database
+touch storage/logs/laravel.log
+
+if grep -qE '^DB_CONNECTION=sqlite' .env 2>/dev/null || ! grep -qE '^DB_CONNECTION=' .env 2>/dev/null; then
+    if [ ! -f database/database.sqlite ]; then
+        echo "Creating SQLite database..."
+        touch database/database.sqlite
+    fi
+fi
 
 if grep -qE '^APP_KEY=$|^APP_KEY=\s*$' .env; then
     echo "Generating application key..."
     php artisan key:generate --force
-fi
-
-# Default .env uses sqlite — create the file if missing
-if grep -qE '^DB_CONNECTION=sqlite' .env; then
-    if [ ! -f database/database.sqlite ]; then
-        echo "Creating SQLite database..."
-        touch database/database.sqlite
-        chown www-data:www-data database/database.sqlite
-        chmod 664 database/database.sqlite
-    fi
 fi
 
 php artisan config:clear || true
@@ -37,6 +33,12 @@ CACHE_STORE=file php artisan cache:clear || true
 
 echo "Running migrations..."
 php artisan migrate --force --no-interaction || true
+
+# Must run AFTER artisan — artisan runs as root and recreates files as root
+chown -R www-data:www-data storage bootstrap/cache database .env
+chmod -R 775 storage bootstrap/cache database
+chmod 664 database/database.sqlite 2>/dev/null || true
+chmod 664 storage/logs/laravel.log 2>/dev/null || true
 
 php-fpm -D
 exec nginx -g "daemon off;"
