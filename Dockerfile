@@ -11,7 +11,7 @@ ENV APP_DEBUG=false
 ENV DB_CONNECTION=mysql
 ENV DB_HOST=aws-setup.cn8iisiiszd1.eu-north-1.rds.amazonaws.com
 ENV DB_PORT=3306
-ENV DB_DATABASE=awssetup
+ENV DB_DATABASE=awsapp
 ENV DB_USERNAME=admin
 ENV MYSQL_ATTR_SSL_CA=/var/www/global-bundle.pem
 ENV LOG_CHANNEL=stderr
@@ -46,7 +46,7 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
     && chmod +x /usr/local/bin/entrypoint.sh
 
-# Ensure php-fpm workers always see MySQL (not sqlite)
+# Pass production env into php-fpm workers (hardcoded log channel avoids file writes)
 RUN printf '%s\n' \
     'env[APP_ENV] = $APP_ENV' \
     'env[APP_DEBUG] = $APP_DEBUG' \
@@ -57,8 +57,8 @@ RUN printf '%s\n' \
     'env[DB_USERNAME] = $DB_USERNAME' \
     'env[DB_PASSWORD] = $DB_PASSWORD' \
     'env[MYSQL_ATTR_SSL_CA] = $MYSQL_ATTR_SSL_CA' \
-    'env[LOG_CHANNEL] = $LOG_CHANNEL' \
-    'env[LOG_STACK] = $LOG_STACK' \
+    'env[LOG_CHANNEL] = stderr' \
+    'env[LOG_STACK] = stderr' \
     > /usr/local/etc/php-fpm.d/zz-docker-env.conf
 
 COPY --from=composer:2.3.5 /usr/bin/composer /usr/bin/composer
@@ -81,8 +81,7 @@ RUN curl -fsSL -o /var/www/global-bundle.pem \
     && rm -f database/database.sqlite bootstrap/cache/config.php \
     && (php artisan config:clear || true) \
     && chown -R www-data:www-data storage bootstrap/cache \
-    && find storage bootstrap/cache -type d -exec chmod 775 {} \; \
-    && find storage bootstrap/cache -type f -exec chmod 664 {} \;
+    && chmod -R 777 storage bootstrap/cache
 
 EXPOSE 8000
 

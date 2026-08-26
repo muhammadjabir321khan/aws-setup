@@ -9,6 +9,8 @@ yarn-error.log
 /public/storage
 .phpunit.cache
 .phpunit.result.cache
+bootstrap/cache/*.php
+!bootstrap/cache/.gitignore
 .git
 .github
 .idea

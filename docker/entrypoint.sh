@@ -51,8 +51,7 @@ fix_permissions() {
 
     # PHP-FPM runs as www-data (see docker/php/php-fpm.conf)
     chown -R www-data:www-data storage bootstrap/cache
-    find storage bootstrap/cache -type d -exec chmod 775 {} \;
-    find storage bootstrap/cache -type f -exec chmod 664 {} \;
+    chmod -R 777 storage bootstrap/cache
 }
 
 # Run Artisan as www-data so new files are not left root-owned
@@ -76,6 +75,10 @@ fi
 
 fix_permissions
 
+# Start web stack early so ECS health checks don't get empty responses during boot
+php-fpm -D
+nginx
+
 # www-data must be able to update .env (key:generate) and write storage
 chown www-data:www-data .env 2>/dev/null || true
 chmod 664 .env 2>/dev/null || true
@@ -88,7 +91,7 @@ fi
 
 DB_HOST_VAL="$(env_get DB_HOST aws-setup.cn8iisiiszd1.eu-north-1.rds.amazonaws.com)"
 DB_PORT_VAL="$(env_get DB_PORT 3306)"
-DB_DATABASE_VAL="$(env_get DB_DATABASE awssetup)"
+DB_DATABASE_VAL="$(env_get DB_DATABASE awsapp)"
 DB_USERNAME_VAL="$(env_get DB_USERNAME admin)"
 DB_PASSWORD_VAL="$(env_get DB_PASSWORD)"
 MYSQL_SSL_CA_VAL="$(env_get MYSQL_ATTR_SSL_CA /var/www/global-bundle.pem)"
@@ -173,5 +176,4 @@ run_as_www php artisan migrate --force --no-interaction || true
 fix_permissions
 chown www-data:www-data .env 2>/dev/null || true
 
-php-fpm -D
-exec nginx -g "daemon off;"
+exec tail -f /var/log/nginx/access.log /var/log/nginx/error.log 2>/dev/null || exec sleep infinity
