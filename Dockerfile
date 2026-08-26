@@ -35,9 +35,12 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 COPY --from=composer:2.3.5 /usr/bin/composer /usr/bin/composer
 COPY --chown=www-data:www-data . .
 
-RUN php artisan cache:clear || true \
+RUN mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache database \
+    && touch database/database.sqlite \
+    && php artisan cache:clear || true \
     && php artisan config:clear || true \
-    && chmod -R 775 storage bootstrap/cache
+    && chown -R www-data:www-data storage bootstrap/cache database \
+    && chmod -R 775 storage bootstrap/cache database
 
 EXPOSE 8000
 
