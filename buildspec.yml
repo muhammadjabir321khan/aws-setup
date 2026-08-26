@@ -6,19 +6,26 @@ env:
     AWS_ACCOUNT_ID: "161327178744"
     IMAGE_REPO_NAME: laravel-app
     IMAGE_TAG: latest
+    REPOSITORY_URI: 161327178744.dkr.ecr.eu-north-1.amazonaws.com/laravel-app
+
 phases:
   install:
     runtime-versions:
       nodejs: 20
+      php: 8.2
     commands:
-      - echo Installing dependencies...
+      - echo Installing PHP and Node dependencies...
+      - composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
       - npm ci
 
   pre_build:
     commands:
+      - echo Preparing Laravel for asset build...
+      - cp -n .env.example .env || true
+      - php artisan key:generate --force || true
+      - php artisan ziggy:generate || true
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
       - echo Repository URI is $REPOSITORY_URI
 
   build:
