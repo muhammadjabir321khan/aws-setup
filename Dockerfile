@@ -50,7 +50,7 @@ RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
 RUN printf '%s\n' \
     'env[APP_ENV] = $APP_ENV' \
     'env[APP_DEBUG] = $APP_DEBUG' \
-    'env[DB_CONNECTION] = $DB_CONNECTION' \
+    'env[DB_CONNECTION] = mysql' \
     'env[DB_HOST] = $DB_HOST' \
     'env[DB_PORT] = $DB_PORT' \
     'env[DB_DATABASE] = $DB_DATABASE' \
