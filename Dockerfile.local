@@ -33,9 +33,17 @@ RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
 
 COPY --from=composer:2.3.5 /usr/bin/composer /usr/bin/composer
 
-RUN mkdir -p storage bootstrap/cache \
+RUN mkdir -p \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        storage/app/public \
+        bootstrap/cache \
+    && touch storage/logs/laravel.log \
     && chown -R www-data:www-data storage bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache
+    && find storage bootstrap/cache -type d -exec chmod 775 {} \; \
+    && find storage bootstrap/cache -type f -exec chmod 664 {} \;
 
 EXPOSE 8000
 

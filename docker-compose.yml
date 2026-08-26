@@ -4,8 +4,12 @@ services:
       context: .
       target: php
     working_dir: /var/www
-    volumes:
-      - ./:/var/www
+    # Do NOT bind-mount .:/var/www here.
+    # A host bind mount replaces the image's /var/www and discards
+    # www-data ownership set during docker build, which causes:
+    #   storage/logs/laravel.log Permission denied
+    # For local dev with a bind mount, use docker-compose.local.yml
+    # (entrypoint re-applies permissions on every start).
     ports:
       - "8000:8000"
     environment:

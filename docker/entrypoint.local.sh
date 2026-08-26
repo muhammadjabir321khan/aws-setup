@@ -44,13 +44,24 @@ until php -r "
 done
 echo "Database is ready."
 
-mkdir -p storage/framework/{cache/data,sessions,views} storage/logs bootstrap/cache
-chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
-chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+# Bind mount (./:/var/www) overrides image ownership — fix on every start.
+# PHP-FPM user is www-data (docker/php/php-fpm.conf).
+fix_permissions() {
+    mkdir -p storage/framework/{cache/data,sessions,views} storage/logs storage/app/public bootstrap/cache
+    touch storage/logs/laravel.log
+    chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+    find storage bootstrap/cache -type d -exec chmod 775 {} \; 2>/dev/null || true
+    find storage bootstrap/cache -type f -exec chmod 664 {} \; 2>/dev/null || true
+}
+
+fix_permissions
 
 php artisan config:clear || true
 # Use file cache for this boot step so missing DB cache tables do not spam errors.
 CACHE_STORE=file php artisan cache:clear || true
+
+# Artisan may create root-owned files — reclaim for php-fpm
+fix_permissions
 
 php-fpm -D
 exec nginx -g "daemon off;"

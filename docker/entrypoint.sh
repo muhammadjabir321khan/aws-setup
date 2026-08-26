@@ -44,14 +44,24 @@ fix_permissions() {
         storage/framework/views \
         storage/logs \
         storage/app/public \
-        bootstrap/cache \
-        database
+        bootstrap/cache
 
+    # Create log file if missing so open(append) does not fail on create perms
     touch storage/logs/laravel.log
 
-    chown -R www-data:www-data storage bootstrap/cache database
-    chmod -R ug+rwx storage bootstrap/cache database
-    chmod 664 storage/logs/laravel.log 2>/dev/null || true
+    # PHP-FPM runs as www-data (see docker/php/php-fpm.conf)
+    chown -R www-data:www-data storage bootstrap/cache
+    find storage bootstrap/cache -type d -exec chmod 775 {} \;
+    find storage bootstrap/cache -type f -exec chmod 664 {} \;
+}
+
+# Run Artisan as www-data so new files are not left root-owned
+run_as_www() {
+    if command -v runuser >/dev/null 2>&1; then
+        runuser -u www-data -- "$@"
+    else
+        su -s /bin/sh -c 'exec "$@"' www-data -- "$@"
+    fi
 }
 
 if [ ! -f "vendor/autoload.php" ]; then
@@ -65,6 +75,10 @@ if [ ! -f ".env" ]; then
 fi
 
 fix_permissions
+
+# www-data must be able to update .env (key:generate) and write storage
+chown www-data:www-data .env 2>/dev/null || true
+chmod 664 .env 2>/dev/null || true
 
 # --- Force MySQL (never sqlite) into .env so php-fpm/Laravel cannot fall back ---
 DB_CONNECTION_VAL="$(env_get DB_CONNECTION mysql)"
@@ -88,6 +102,8 @@ set_env_file DB_PASSWORD "$DB_PASSWORD_VAL"
 set_env_file MYSQL_ATTR_SSL_CA "$MYSQL_SSL_CA_VAL"
 set_env_file APP_ENV "$(env_get APP_ENV production)"
 set_env_file APP_DEBUG "$(env_get APP_DEBUG false)"
+set_env_file LOG_CHANNEL "$(env_get LOG_CHANNEL stderr)"
+set_env_file LOG_STACK "$(env_get LOG_STACK stderr)"
 
 # Remove sqlite default line if commented remnants cause confusion
 sed -i '/^# DB_CONNECTION=sqlite/d' .env 2>/dev/null || true
@@ -106,7 +122,7 @@ export MYSQL_ATTR_SSL_CA="$MYSQL_SSL_CA_VAL"
 
 if grep -qE '^APP_KEY=$|^APP_KEY=\s*$' .env; then
     echo "Generating application key..."
-    php artisan key:generate --force || true
+    run_as_www php artisan key:generate --force || true
 fi
 
 if [ ! -f /var/www/global-bundle.pem ]; then
@@ -146,13 +162,14 @@ for i in $(seq 1 30); do
 done
 
 # Drop any cached config that might still say sqlite
-php artisan config:clear || true
+run_as_www php artisan config:clear || true
 rm -f bootstrap/cache/config.php
-CACHE_STORE=file php artisan cache:clear || true
+run_as_www env CACHE_STORE=file php artisan cache:clear || true
 
 echo "Running migrations..."
-php artisan migrate --force --no-interaction || true
+run_as_www php artisan migrate --force --no-interaction || true
 
+# Re-apply after any root-owned files from earlier steps
 fix_permissions
 chown www-data:www-data .env 2>/dev/null || true
 

@@ -21,9 +21,12 @@ phases:
   pre_build:
     commands:
       - echo Preparing Laravel for asset build...
+      # Do NOT create .env here — it would be baked into the image via docker build.
+      # Runtime entrypoint + ECS env vars configure production MySQL.
       - cp -n .env.example .env || true
       - php artisan key:generate --force || true
       - php artisan ziggy:generate || true
+      - rm -f .env
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - echo Repository URI is $REPOSITORY_URI
