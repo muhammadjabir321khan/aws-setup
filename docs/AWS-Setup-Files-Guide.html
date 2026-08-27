@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AWS-Setup Project — File Guide for Beginners</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      color: #1a1a1a;
+      line-height: 1.5;
+      font-size: 11pt;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { font-size: 22pt; margin: 0 0 8px; color: #0b3d5c; }
+    h2 {
+      font-size: 14pt;
+      color: #0b3d5c;
+      border-bottom: 2px solid #0b3d5c;
+      padding-bottom: 4px;
+      margin-top: 28px;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 12pt;
+      color: #163a52;
+      margin: 18px 0 6px;
+      page-break-after: avoid;
+    }
+    .subtitle { color: #555; margin-bottom: 20px; }
+    .meta { font-size: 10pt; color: #666; margin-bottom: 24px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 16px;
+      font-size: 10pt;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #e8f1f8; }
+    .card {
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 12px 0 18px;
+      page-break-inside: avoid;
+      background: #fafbfc;
+    }
+    .label {
+      display: inline-block;
+      font-weight: 700;
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #0b3d5c;
+      margin-top: 8px;
+    }
+    .label:first-child { margin-top: 0; }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #eef2f5;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 9.5pt;
+    }
+    ul { margin: 6px 0 10px; padding-left: 20px; }
+    li { margin-bottom: 4px; }
+    .toc a { color: #0b3d5c; text-decoration: none; }
+    .flow {
+      background: #0b3d5c;
+      color: white;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 10pt;
+      line-height: 1.7;
+    }
+    .note {
+      background: #fff8e6;
+      border-left: 4px solid #e6a800;
+      padding: 8px 12px;
+      margin: 12px 0;
+      font-size: 10pt;
+    }
+    .footer {
+      margin-top: 36px;
+      padding-top: 12px;
+      border-top: 1px solid #ccc;
+      font-size: 9pt;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>AWS-Setup Project File Guide</h1>
+  <p class="subtitle">Beginner learning document — Purpose, Definition, and Improvements for every important file</p>
+  <p class="meta">Project: AWS-setup (Laravel + Docker + AWS ECR/ECS)<br>
+  Region: eu-north-1 &nbsp;|&nbsp; ECR repo: laravel-app &nbsp;|&nbsp; ECS: awsapp / awsapp</p>
+
+  <h2>1. How the project works (simple picture)</h2>
+  <div class="flow">
+    <strong>Local development:</strong><br>
+    setup.ps1 / Makefile → Dockerfile.local → Docker on your PC + local MySQL<br><br>
+    <strong>Production deploy:</strong><br>
+    buildspec.yml (AWS) or deploy.ps1 (your PC) → Dockerfile → push to ECR → ECS restarts app → app talks to RDS MySQL
+  </div>
+  <div class="note">
+    <strong>Remember:</strong> An <em>image</em> is a packed snapshot of your app. A <em>container</em> is a running copy of that image. ECR stores images. ECS runs them.
+  </div>
+
+  <h2>2. Table of contents</h2>
+  <ol class="toc">
+    <li>buildspec.yml</li>
+    <li>deploy.ps1</li>
+    <li>Dockerfile</li>
+    <li>Dockerfile.local</li>
+    <li>setup.ps1</li>
+    <li>Makefile</li>
+    <li>docker-compose.yml</li>
+    <li>docker-compose.local.yml</li>
+    <li>docker/entrypoint.sh</li>
+    <li>docker/entrypoint.local.sh</li>
+    <li>docker/nginx/nginx.config</li>
+    <li>docker/php/php.ini</li>
+    <li>docker/php/php.local.ini</li>
+    <li>docker/php/php-fpm.conf</li>
+  </ol>
+
+  <!-- ========== FILE CARDS ========== -->
+
+  <h2>3. File-by-file guide</h2>
+
+  <div class="card">
+    <h3>3.1 buildspec.yml</h3>
+    <div class="label">Definition</div>
+    <p>A <strong>buildspec</strong> is AWS CodeBuild’s instruction file. It lists commands to run in the cloud when a build starts (like a recipe for automatic deploy).</p>
+    <div class="label">Purpose</div>
+    <p>Automatically: install PHP/Node dependencies, build frontend assets, build the Docker image, push it to Amazon ECR, and force ECS to deploy the new image.</p>
+    <div class="label">What it does (steps)</div>
+    <ol>
+      <li><code>install</code> — Composer + npm packages</li>
+      <li><code>pre_build</code> — prepare Laravel for asset build, login to ECR (delete temporary .env so secrets are not baked in)</li>
+      <li><code>build</code> — npm run build + docker build</li>
+      <li><code>post_build</code> — docker push + ECS force new deployment</li>
+    </ol>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Do not hardcode account ID / RDS details only in files — prefer CodeBuild env vars or Parameter Store</li>
+      <li>Add a health check wait after ECS update (confirm deployment success)</li>
+      <li>Run tests before building/pushing the image</li>
+      <li>Use immutable tags (git commit SHA) instead of only <code>latest</code></li>
+      <li>Cache Docker layers carefully instead of always <code>--no-cache</code> (faster builds)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.2 deploy.ps1</h3>
+    <div class="label">Definition</div>
+    <p>A <strong>PowerShell deploy script</strong> you run on your Windows PC to build and ship the production image manually.</p>
+    <div class="label">Purpose</div>
+    <p>Same job as buildspec.yml, but local: build assets → Docker build → push to ECR → tell ECS to redeploy. Useful when CodeBuild is slow or you want a one-off deploy.</p>
+    <div class="label">What it does (steps)</div>
+    <ol>
+      <li>Set AWS region, account, ECR repo, ECS names</li>
+      <li><code>npm ci</code> and <code>npm run build</code></li>
+      <li>Login to ECR</li>
+      <li>Build and tag image</li>
+      <li>Push image</li>
+      <li>Force ECS update (warns if IAM blocks UpdateService)</li>
+    </ol>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Fail the script if ECS update fails (today it exits 0 with a warning)</li>
+      <li>Add a <code>-SkipBuild</code> flag to only push/redeploy</li>
+      <li>Print the new ECS task public IP when ready</li>
+      <li>Support commit-SHA tags for safer rollbacks</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.3 Dockerfile</h3>
+    <div class="label">Definition</div>
+    <p>A <strong>Dockerfile</strong> is a recipe Docker uses to build an image: base OS/PHP, packages, config files, app code, and startup command.</p>
+    <div class="label">Purpose</div>
+    <p>Create the <strong>production</strong> image that ECS runs: PHP 8.2-FPM + Nginx + Laravel app, configured for MySQL/RDS and production logging.</p>
+    <div class="label">Key ideas inside</div>
+    <ul>
+      <li>Production env vars baked in (APP_ENV, DB host, etc.)</li>
+      <li><code>DB_PASSWORD</code> is NOT baked in — comes from ECS at runtime</li>
+      <li>Copies nginx/php configs and <code>entrypoint.sh</code></li>
+      <li>Downloads RDS SSL certificate</li>
+      <li>Exposes port 8000</li>
+    </ul>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Move DB host/username out of Dockerfile into ECS task definition / secrets</li>
+      <li>Use multi-stage build (build assets in one stage, slim runtime stage)</li>
+      <li>Avoid <code>chmod 777</code> — use safer ownership and permissions</li>
+      <li>Run as non-root where possible</li>
+      <li>Add a HEALTHCHECK instruction</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.4 Dockerfile.local</h3>
+    <div class="label">Definition</div>
+    <p>A separate Dockerfile used only for <strong>local development</strong> containers.</p>
+    <div class="label">Purpose</div>
+    <p>Give developers a PHP+Nginx box on their laptop. Code is usually bind-mounted from the host (so edits appear instantly). Opcache is off for easier debugging.</p>
+    <div class="label">Difference from production Dockerfile</div>
+    <ul>
+      <li>Uses <code>php.local.ini</code> and <code>entrypoint.local.sh</code></li>
+      <li>Does not bake production RDS settings</li>
+      <li>Does not copy full app into image the same way (compose mounts code)</li>
+    </ul>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Keep local and prod Dockerfiles closer (shared base stage) to avoid “works locally, fails in AWS”</li>
+      <li>Document required ports and env vars in comments at the top</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.5 setup.ps1</h3>
+    <div class="label">Definition</div>
+    <p>A Windows helper script with commands like <code>setup</code>, <code>up</code>, <code>migrate</code>, <code>push</code>.</p>
+    <div class="label">Purpose</div>
+    <p>Make local Docker development easy without remembering long docker compose commands. Also includes production helpers (<code>ecr-login</code>, <code>prod-build</code>, <code>push</code>).</p>
+    <div class="label">Common commands</div>
+    <table>
+      <tr><th>Command</th><th>Meaning</th></tr>
+      <tr><td><code>.\setup.ps1 setup</code></td><td>First-time local setup</td></tr>
+      <tr><td><code>.\setup.ps1 up</code></td><td>Start containers</td></tr>
+      <tr><td><code>.\setup.ps1 migrate</code></td><td>Run database migrations</td></tr>
+      <tr><td><code>.\setup.ps1 push</code></td><td>Build + push ECR + ECS redeploy</td></tr>
+    </table>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Align local DB name/password with <code>docker-compose.local.yml</code> (small mismatches confuse beginners)</li>
+      <li>Add <code>status</code> command showing container health</li>
+      <li>Add safer confirmation before production push</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.6 Makefile</h3>
+    <div class="label">Definition</div>
+    <p>A Makefile is a list of named tasks you run with <code>make &lt;task&gt;</code> (common on Linux/Mac/WSL).</p>
+    <div class="label">Purpose</div>
+    <p>Same idea as <code>setup.ps1</code>, but for make users: <code>make setup</code>, <code>make up</code>, <code>make push</code>, etc.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Keep Makefile and setup.ps1 in sync (same command names and behavior)</li>
+      <li>On pure Windows without make, document that <code>setup.ps1</code> is preferred</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.7 docker-compose.yml</h3>
+    <div class="label">Definition</div>
+    <p>Compose file describing services (containers) and how they connect. This one is production-style.</p>
+    <div class="label">Purpose</div>
+    <p>Run the production Dockerfile locally (without bind-mounting code) to test closer to AWS. Expects real DB env vars (often RDS).</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Clarify in README when to use this vs local compose</li>
+      <li>Optional: add a profile for local MySQL if needed</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.8 docker-compose.local.yml</h3>
+    <div class="label">Definition</div>
+    <p>Compose file for local development: PHP app + MySQL database.</p>
+    <div class="label">Purpose</div>
+    <p>Start a full local stack. Mounts your project folder into the container so code changes are live. Uses healthcheck so PHP waits for MySQL.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Keep DB credentials consistent across compose, entrypoint.local, and setup.ps1</li>
+      <li>Add a node service or document that npm runs on the host</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.9 docker/entrypoint.sh</h3>
+    <div class="label">Definition</div>
+    <p>The <strong>startup script</strong> that runs every time the production container starts (before the app serves traffic).</p>
+    <div class="label">Purpose</div>
+    <p>Write/update <code>.env</code> from ECS environment variables (including DB password), fix storage permissions, start php-fpm and nginx, optionally run migrations.</p>
+    <div class="label">Why it matters</div>
+    <p>Secrets like DB password should not live inside the image. Entrypoint receives them at runtime from ECS.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Fail clearly if required env vars are missing</li>
+      <li>Separate migrate into a one-off ECS task (safer than migrate on every container start)</li>
+      <li>Reduce permission chmod breadth for better security</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.10 docker/entrypoint.local.sh</h3>
+    <div class="label">Definition</div>
+    <p>Startup script for the local development container.</p>
+    <div class="label">Purpose</div>
+    <p>Create a local <code>.env</code> if missing, wait for MySQL, install Composer if needed, generate APP_KEY, start php-fpm + nginx.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Match database name/password with compose defaults exactly</li>
+      <li>Print a clear “App ready at http://127.0.0.1:8000” message</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.11 docker/nginx/nginx.config</h3>
+    <div class="label">Definition</div>
+    <p>Nginx web server configuration for the container.</p>
+    <div class="label">Purpose</div>
+    <p>Listen on port 8000, serve Laravel’s <code>public/</code> folder, and pass PHP requests to PHP-FPM on 127.0.0.1:9000.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Add gzip / caching headers for static assets</li>
+      <li>Tighten security headers (X-Frame-Options, etc.)</li>
+      <li>Hide nginx version in responses</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.12 docker/php/php.ini</h3>
+    <div class="label">Definition</div>
+    <p>PHP runtime settings for production image.</p>
+    <div class="label">Purpose</div>
+    <p>Configure memory limits, upload sizes, timezone, error display, and opcache behavior for production.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Turn <code>display_errors</code> Off in true production (log errors instead)</li>
+      <li>Tune opcache for production (validate_timestamps=0 when code is immutable in the image)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.13 docker/php/php.local.ini</h3>
+    <div class="label">Definition</div>
+    <p>PHP settings for local development.</p>
+    <div class="label">Purpose</div>
+    <p>Disable opcache, allow higher memory/time limits, show errors — better for debugging while coding.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Optionally enable Xdebug behind an env flag for step debugging</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3.14 docker/php/php-fpm.conf</h3>
+    <div class="label">Definition</div>
+    <p>PHP-FPM pool config (how PHP worker processes run).</p>
+    <div class="label">Purpose</div>
+    <p>Run as www-data, listen on 9000, keep environment variables available to Laravel (<code>clear_env = no</code>), control worker counts.</p>
+    <div class="label">Improvements</div>
+    <ul>
+      <li>Tune <code>pm.max_children</code> based on ECS task CPU/memory</li>
+      <li>Add slow-log for requests that take too long</li>
+    </ul>
+  </div>
+
+  <h2>4. Beginner glossary</h2>
+  <table>
+    <tr><th>Term</th><th>Simple meaning</th></tr>
+    <tr><td>Docker</td><td>Tool to package and run apps in containers</td></tr>
+    <tr><td>Image</td><td>Frozen package of your app + tools</td></tr>
+    <tr><td>Container</td><td>Running instance of an image</td></tr>
+    <tr><td>ECR</td><td>AWS storage for Docker images</td></tr>
+    <tr><td>ECS</td><td>AWS service that runs containers</td></tr>
+    <tr><td>RDS</td><td>AWS managed MySQL database</td></tr>
+    <tr><td>CodeBuild</td><td>AWS service that runs buildspec.yml</td></tr>
+    <tr><td>CI/CD</td><td>Automatic build/test/deploy pipeline</td></tr>
+    <tr><td>.env</td><td>File with secrets and environment settings</td></tr>
+    <tr><td>Entrypoint</td><td>Script that runs when container starts</td></tr>
+    <tr><td>Nginx</td><td>Web server that handles HTTP requests</td></tr>
+    <tr><td>PHP-FPM</td><td>Process manager that runs PHP code</td></tr>
+  </table>
+
+  <h2>5. What to learn next (order)</h2>
+  <ol>
+    <li>Run local app: <code>.\setup.ps1 setup</code> → open http://127.0.0.1:8000</li>
+    <li>Read <code>Dockerfile.local</code> + <code>entrypoint.local.sh</code></li>
+    <li>Read production <code>Dockerfile</code> + <code>entrypoint.sh</code></li>
+    <li>Compare <code>deploy.ps1</code> with <code>buildspec.yml</code> (same steps, different place)</li>
+    <li>In AWS Console, watch one CodeBuild run and one ECS deployment</li>
+  </ol>
+
+  <div class="footer">
+    Generated for learning purposes from the AWS-setup repository files.<br>
+    Tip: Print or save this PDF and mark each file as you understand it.
+  </div>
+
+</body>
+</html>
