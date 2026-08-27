@@ -18,9 +18,9 @@ set_env_file() {
 env_get() {
     local key="$1"
     local default="${2-}"
-    local val="${!key-}"
-    if [ -n "$val" ]; then
-        printf '%s' "$val"
+    # Prefer real process environment (ECS task env)
+    if [ -n "${!key+x}" ] && [ -n "${!key}" ]; then
+        printf '%s' "${!key}"
         return
     fi
     if [ -f .env ]; then
@@ -48,11 +48,12 @@ fix_permissions() {
     chmod -R 777 storage bootstrap/cache
 }
 
+# Preserve env so DB_PASSWORD from ECS reaches artisan
 run_as_www() {
     if command -v runuser >/dev/null 2>&1; then
-        runuser -u www-data -- "$@"
+        runuser -u www-data --preserve-environment -- "$@"
     else
-        su -s /bin/sh -c 'exec "$@"' www-data -- "$@"
+        su --preserve-environment -s /bin/sh -c 'exec "$@"' www-data -- "$@"
     fi
 }
 
@@ -83,6 +84,7 @@ configure_env() {
 
     sed -i '/^# DB_CONNECTION=sqlite/d' .env 2>/dev/null || true
     sed -i '/^DB_CONNECTION=sqlite/d' .env 2>/dev/null || true
+    # Never keep a cached config with an empty password baked in
     rm -f database/database.sqlite bootstrap/cache/config.php
 
     export DB_CONNECTION="$DB_CONNECTION_VAL"
@@ -98,6 +100,14 @@ configure_env() {
     echo "Database driver: DB_CONNECTION=${DB_CONNECTION_VAL}"
     echo "Database host: DB_HOST=${DB_HOST_VAL}"
     echo "Database name: DB_DATABASE=${DB_DATABASE_VAL}"
+    echo "Database user: DB_USERNAME=${DB_USERNAME_VAL}"
+    if [ -n "$DB_PASSWORD_VAL" ]; then
+        echo "Database password: SET (length=${#DB_PASSWORD_VAL})"
+    else
+        echo "ERROR: DB_PASSWORD is EMPTY."
+        echo "Set DB_PASSWORD in ECS Task Definition -> Container -> Environment variables,"
+        echo "create a new revision, update the service to that revision, Force new deployment."
+    fi
 }
 
 if [ ! -f "vendor/autoload.php" ]; then
@@ -110,23 +120,21 @@ if [ ! -f ".env" ]; then
     cp .env.example .env
 fi
 
-# Configure MySQL BEFORE starting php-fpm — prevents sqlite fallback on first request
+# Configure MySQL BEFORE starting php-fpm
 configure_env
 fix_permissions
 chown www-data:www-data .env 2>/dev/null || true
 chmod 664 .env 2>/dev/null || true
 
-run_as_www php artisan config:clear || true
+# Do NOT config:cache — it freezes empty DB_PASSWORD when ECS env is missing.
+# Runtime env() + .env must stay live so ECS task env vars work.
+php artisan config:clear || true
 rm -f bootstrap/cache/config.php
 
 if grep -qE '^APP_KEY=$|^APP_KEY=\s*$' .env; then
     echo "Generating application key..."
-    run_as_www php artisan key:generate --force || true
+    php artisan key:generate --force || true
 fi
-
-# Bake production config so Laravel cannot fall back to sqlite or file logging
-echo "Caching production config..."
-run_as_www php artisan config:cache || true
 
 if [ ! -f /var/www/global-bundle.pem ]; then
     echo "Downloading RDS CA bundle..."
@@ -134,12 +142,15 @@ if [ ! -f /var/www/global-bundle.pem ]; then
         https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem || true
 fi
 
-# Start web stack only after .env + config are ready
 php-fpm -D
 nginx
 
 echo "Waiting for MySQL at ${DB_HOST}:${DB_PORT}..."
 for i in $(seq 1 30); do
+    if [ -z "$DB_PASSWORD" ]; then
+        echo "Skipping MySQL wait: DB_PASSWORD is empty"
+        break
+    fi
     if php -r "
         try {
             \$opts = [];
@@ -168,10 +179,11 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
-run_as_www env CACHE_STORE=file php artisan cache:clear || true
-
-echo "Running migrations..."
-run_as_www php artisan migrate --force --no-interaction || true
+if [ -n "$DB_PASSWORD" ]; then
+    CACHE_STORE=file php artisan cache:clear || true
+    echo "Running migrations..."
+    php artisan migrate --force --no-interaction || true
+fi
 
 fix_permissions
 
