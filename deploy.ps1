@@ -27,15 +27,28 @@ Write-Host "==> Pushing $ECR_IMAGE ..."
 docker push $ECR_IMAGE
 
 Write-Host "==> Forcing new ECS deployment ($ECS_CLUSTER / $ECS_SERVICE)..."
-aws ecs update-service `
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$ecsOut = aws ecs update-service `
     --cluster $ECS_CLUSTER `
     --service $ECS_SERVICE `
     --force-new-deployment `
-    --region $AWS_REGION | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "ecs update-service failed" }
+    --region $AWS_REGION 2>&1
+$ecsCode = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+
+if ($ecsCode -ne 0) {
+    Write-Host ""
+    Write-Host "Pushed: $ECR_IMAGE"
+    Write-Host "WARNING: Image pushed OK, but ECS auto-redeploy failed."
+    Write-Host ($ecsOut | Out-String)
+    Write-Host "Fix: IAM -> Users -> jabir -> Permissions boundary -> edit policy -> allow ecs:UpdateService"
+    Write-Host "Or manually: ECS -> awsapp -> awsapp -> Update -> Force new deployment"
+    Write-Host ""
+    exit 0
+}
 
 Write-Host ""
 Write-Host "Pushed: $ECR_IMAGE"
 Write-Host "ECS redeploy started. Wait for a new Running task, then use its Public IP."
-Write-Host "Override names if needed: `$env:ECS_CLUSTER=...; `$env:ECS_SERVICE=..."
 Write-Host ""
