@@ -58,6 +58,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trust Request Host (dynamic APP_URL)
+    |--------------------------------------------------------------------------
+    |
+    | When true, web requests use the browser Host header for generated URLs
+    | (assets, redirects, Inertia). Use on ECS/Fargate where the public IP
+    | changes on every task. APP_URL is still used for Artisan/queue workers.
+    |
+    */
+
+    'trust_request_host' => env('TRUST_REQUEST_HOST', env('APP_ENV') === 'production'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

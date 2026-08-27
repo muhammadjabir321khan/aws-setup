@@ -84,7 +84,13 @@ configure_env() {
 
     APP_URL_VAL="$(env_get APP_URL http://localhost:8000)"
     set_env_file APP_URL "$APP_URL_VAL"
-    set_env_file ASSET_URL "$(env_get ASSET_URL "$APP_URL_VAL")"
+    set_env_file TRUST_REQUEST_HOST "$(env_get TRUST_REQUEST_HOST true)"
+    # Do not pin ASSET_URL to APP_URL — ECS task IPs change; Laravel uses request host instead
+    if [ -n "$(env_get ASSET_URL "")" ]; then
+        set_env_file ASSET_URL "$(env_get ASSET_URL "")"
+    else
+        sed -i '/^ASSET_URL=/d' .env 2>/dev/null || true
+    fi
 
     sed -i '/^# DB_CONNECTION=sqlite/d' .env 2>/dev/null || true
     sed -i '/^DB_CONNECTION=sqlite/d' .env 2>/dev/null || true
