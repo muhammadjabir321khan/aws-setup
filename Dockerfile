@@ -46,7 +46,9 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
     && chmod +x /usr/local/bin/entrypoint.sh
 
-# Pass production env into php-fpm workers (hardcoded log channel avoids file writes)
+# Pass production env into php-fpm workers.
+# DB_PASSWORD is intentionally omitted here — entrypoint writes it to .env from ECS env.
+# Passing env[DB_PASSWORD]=$DB_PASSWORD when empty blocks Laravel from reading .env.
 RUN printf '%s\n' \
     'env[APP_ENV] = $APP_ENV' \
     'env[APP_DEBUG] = $APP_DEBUG' \
@@ -55,7 +57,6 @@ RUN printf '%s\n' \
     'env[DB_PORT] = $DB_PORT' \
     'env[DB_DATABASE] = $DB_DATABASE' \
     'env[DB_USERNAME] = $DB_USERNAME' \
-    'env[DB_PASSWORD] = $DB_PASSWORD' \
     'env[MYSQL_ATTR_SSL_CA] = $MYSQL_ATTR_SSL_CA' \
     'env[LOG_CHANNEL] = stderr' \
     'env[LOG_STACK] = stderr' \
