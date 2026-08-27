@@ -44,5 +44,9 @@ phases:
     commands:
       - echo Pushing the Docker image...
       - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER
+      - docker push $REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER
       - echo Build completed on $(date)
       - echo Image pushed $REPOSITORY_URI:$IMAGE_TAG
+      - echo Build number tag $REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER
+      - echo IMPORTANT - ECS Force new deployment required after this build

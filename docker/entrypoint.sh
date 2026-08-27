@@ -124,6 +124,10 @@ if grep -qE '^APP_KEY=$|^APP_KEY=\s*$' .env; then
     run_as_www php artisan key:generate --force || true
 fi
 
+# Bake production config so Laravel cannot fall back to sqlite or file logging
+echo "Caching production config..."
+run_as_www php artisan config:cache || true
+
 if [ ! -f /var/www/global-bundle.pem ]; then
     echo "Downloading RDS CA bundle..."
     curl -fsSL -o /var/www/global-bundle.pem \
