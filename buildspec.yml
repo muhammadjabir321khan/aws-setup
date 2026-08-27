@@ -7,6 +7,8 @@ env:
     IMAGE_REPO_NAME: laravel-app
     IMAGE_TAG: latest
     REPOSITORY_URI: 161327178744.dkr.ecr.eu-north-1.amazonaws.com/laravel-app
+    ECS_CLUSTER: awsapp
+    ECS_SERVICE: awsapp
 
 phases:
   install:
@@ -46,7 +48,9 @@ phases:
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER
       - docker push $REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER
+      - echo Forcing new ECS deployment...
+      - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment --region $AWS_DEFAULT_REGION
       - echo Build completed on $(date)
       - echo Image pushed $REPOSITORY_URI:$IMAGE_TAG
       - echo Build number tag $REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER
-      - echo IMPORTANT - ECS Force new deployment required after this build
+      - echo ECS redeploy started for $ECS_CLUSTER / $ECS_SERVICE

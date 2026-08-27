@@ -19,6 +19,8 @@ $AwsAccount = if ($env:AWS_ACCOUNT) { $env:AWS_ACCOUNT } else { "161327178744" }
 $EcrRepo = if ($env:ECR_REPO) { $env:ECR_REPO } else { "laravel-app" }
 $ImageName = if ($env:IMAGE_NAME) { $env:IMAGE_NAME } else { "laravel-app" }
 $ImageTag = if ($env:IMAGE_TAG) { $env:IMAGE_TAG } else { "latest" }
+$EcsCluster = if ($env:ECS_CLUSTER) { $env:ECS_CLUSTER } else { "awsapp" }
+$EcsService = if ($env:ECS_SERVICE) { $env:ECS_SERVICE } else { "awsapp" }
 $EcrRegistry = "$AwsAccount.dkr.ecr.$AwsRegion.amazonaws.com"
 $EcrImage = "$EcrRegistry/${EcrRepo}:$ImageTag"
 
@@ -61,9 +63,10 @@ function Show-Help {
     Write-Host "  ecr-login  Authenticate Docker to AWS ECR"
     Write-Host "  prod-build Build production image (Dockerfile)"
     Write-Host "  prod-tag   Tag image for ECR"
-    Write-Host "  push       Login, build, tag, and push to ECR"
+    Write-Host "  push       Login, build, tag, push to ECR, force ECS redeploy"
     Write-Host ""
     Write-Host "  Image: $EcrImage"
+    Write-Host "  ECS:   $EcsCluster / $EcsService"
     Write-Host ""
 }
 
@@ -88,14 +91,26 @@ function Invoke-ProdTag {
     if ($LASTEXITCODE -ne 0) { throw "docker tag failed" }
 }
 
+function Invoke-EcsDeploy {
+    Write-Host "Forcing new ECS deployment ($EcsCluster / $EcsService)..."
+    aws ecs update-service `
+        --cluster $EcsCluster `
+        --service $EcsService `
+        --force-new-deployment `
+        --region $AwsRegion | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "ecs update-service failed" }
+}
+
 function Invoke-Push {
     Invoke-EcrLogin
     Invoke-ProdBuild
     Invoke-ProdTag
     docker push $EcrImage
     if ($LASTEXITCODE -ne 0) { throw "docker push failed" }
+    Invoke-EcsDeploy
     Write-Host ""
     Write-Host "  Pushed: $EcrImage"
+    Write-Host "  ECS redeploy started ($EcsCluster / $EcsService)."
     Write-Host ""
 }
 

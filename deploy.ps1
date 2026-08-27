@@ -1,10 +1,12 @@
-# Deploy production image to ECR (Windows PowerShell — no make required)
+# Deploy production image to ECR and force a new ECS deployment
 $ErrorActionPreference = "Stop"
 
 $AWS_REGION = if ($env:AWS_REGION) { $env:AWS_REGION } else { "eu-north-1" }
 $AWS_ACCOUNT = if ($env:AWS_ACCOUNT) { $env:AWS_ACCOUNT } else { "161327178744" }
 $ECR_REPO = if ($env:ECR_REPO) { $env:ECR_REPO } else { "laravel-app" }
 $IMAGE_TAG = if ($env:IMAGE_TAG) { $env:IMAGE_TAG } else { "latest" }
+$ECS_CLUSTER = if ($env:ECS_CLUSTER) { $env:ECS_CLUSTER } else { "awsapp" }
+$ECS_SERVICE = if ($env:ECS_SERVICE) { $env:ECS_SERVICE } else { "awsapp" }
 $ECR_REGISTRY = "$AWS_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com"
 $ECR_IMAGE = "$ECR_REGISTRY/${ECR_REPO}:$IMAGE_TAG"
 
@@ -24,8 +26,16 @@ docker tag "laravel-app:$IMAGE_TAG" $ECR_IMAGE
 Write-Host "==> Pushing $ECR_IMAGE ..."
 docker push $ECR_IMAGE
 
+Write-Host "==> Forcing new ECS deployment ($ECS_CLUSTER / $ECS_SERVICE)..."
+aws ecs update-service `
+    --cluster $ECS_CLUSTER `
+    --service $ECS_SERVICE `
+    --force-new-deployment `
+    --region $AWS_REGION | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "ecs update-service failed" }
+
 Write-Host ""
 Write-Host "Pushed: $ECR_IMAGE"
-Write-Host "Next: ECS -> your service -> Update -> Force new deployment"
-Write-Host "Confirm the new task has a NEW Public IP (old IP means old task)."
+Write-Host "ECS redeploy started. Wait for a new Running task, then use its Public IP."
+Write-Host "Override names if needed: `$env:ECS_CLUSTER=...; `$env:ECS_SERVICE=..."
 Write-Host ""

@@ -11,6 +11,8 @@ AWS_ACCOUNT  ?= 161327178744
 ECR_REPO     ?= laravel-app
 IMAGE_NAME   ?= laravel-app
 IMAGE_TAG    ?= latest
+ECS_CLUSTER  ?= awsapp
+ECS_SERVICE  ?= awsapp
 ECR_REGISTRY := $(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
 ECR_IMAGE    := $(ECR_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)
 
@@ -103,8 +105,10 @@ prod-build: assets ## Build production Docker image (Dockerfile)
 prod-tag: ## Tag local image for ECR
 	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(ECR_IMAGE)
 
-push: ecr-login prod-build prod-tag ## Build, tag, and push image to ECR
+push: ecr-login prod-build prod-tag ## Build, tag, push to ECR, and force ECS redeploy
 	docker push $(ECR_IMAGE)
+	aws ecs update-service --cluster $(ECS_CLUSTER) --service $(ECS_SERVICE) --force-new-deployment --region $(AWS_REGION)
 	@echo ""
 	@echo "  Pushed: $(ECR_IMAGE)"
+	@echo "  ECS redeploy started ($(ECS_CLUSTER) / $(ECS_SERVICE))."
 	@echo ""
