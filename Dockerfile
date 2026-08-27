@@ -57,6 +57,8 @@ RUN printf '%s\n' \
     'env[DB_PORT] = $DB_PORT' \
     'env[DB_DATABASE] = $DB_DATABASE' \
     'env[DB_USERNAME] = $DB_USERNAME' \
+    'env[APP_URL] = $APP_URL' \
+    'env[ASSET_URL] = $ASSET_URL' \
     'env[MYSQL_ATTR_SSL_CA] = $MYSQL_ATTR_SSL_CA' \
     'env[LOG_CHANNEL] = stderr' \
     'env[LOG_STACK] = stderr' \

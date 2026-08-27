@@ -82,6 +82,10 @@ configure_env() {
     set_env_file LOG_CHANNEL "$(env_get LOG_CHANNEL stderr)"
     set_env_file LOG_STACK "$(env_get LOG_STACK stderr)"
 
+    APP_URL_VAL="$(env_get APP_URL http://localhost:8000)"
+    set_env_file APP_URL "$APP_URL_VAL"
+    set_env_file ASSET_URL "$(env_get ASSET_URL "$APP_URL_VAL")"
+
     sed -i '/^# DB_CONNECTION=sqlite/d' .env 2>/dev/null || true
     sed -i '/^DB_CONNECTION=sqlite/d' .env 2>/dev/null || true
     # Never keep a cached config with an empty password baked in
@@ -101,6 +105,7 @@ configure_env() {
     echo "Database host: DB_HOST=${DB_HOST_VAL}"
     echo "Database name: DB_DATABASE=${DB_DATABASE_VAL}"
     echo "Database user: DB_USERNAME=${DB_USERNAME_VAL}"
+    echo "App URL: APP_URL=${APP_URL_VAL}"
     if [ -n "$DB_PASSWORD_VAL" ]; then
         echo "Database password: SET (length=${#DB_PASSWORD_VAL})"
     else
